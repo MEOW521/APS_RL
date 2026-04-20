@@ -1,0 +1,9 @@
+{
+  "env":{
+    "max_continuous_model_qty": 240.0,
+    "max_continuous_biw_qty": 60.0,
+    "max_continuous_mat_qty": 30.0,
+    "max_model_biw_types": 3.0,
+    "max_biw_mat_types": 2.0
+  }
+}
