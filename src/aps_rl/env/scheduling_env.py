@@ -1,17 +1,20 @@
 import gymnasium as gym
+from gymnasium import spaces
 import pandas as pd
 import numpy as np
-from util.config import APSConfig
+from aps_rl.utils.config import APSConfig
 
 class SchedulingEnv(gym.Env):
     def __init__(self, data_path: str, config_path: str):
         super().__init__()
+        # 配置项
         self.config = APSConfig(config_path)
         self.max_continuous_model_qty = float(self.config.get("env.max_continuous_model_qty", 240.0))
         self.max_continuous_biw_qty = float(self.config.get("env.max_continuous_biw_qty", 60.0))
         self.max_continuous_mat_qty = float(self.config.get("env.max_continuous_mat_qty", 30.0))
         self.max_model_biw_types = float(self.config.get("env.max_model_biw_types", 3.0))
         self.max_biw_mat_types = float(self.config.get("env.max_biw_mat_types", 2.0))
+
 
         # 读取数据: 车型，白车身，整车物料号，计划上线日期，计划产量
         self.df = pd.read_csv(data_path, encoding='utf-8')
@@ -29,11 +32,20 @@ class SchedulingEnv(gym.Env):
         # 动作空间：整车物料号
         # agent选择一个整车物料号，环境选择生产的数量
         self.num_actions = len(self.df_agg)
+        self.action_space = spaces.Discrete(self.num_actions)
+
+        # 状态空间：全局状态、候选特征、动作掩码
+        self.observation_space = spaces.Dict({
+            "global_state": spaces.Box(0.0, 1.0, shape=(5,), dtype=np.float32),
+            "candidate_features": spaces.Box(0.0, 1.0, shape=(self.num_actions, 9), dtype=np.float32),
+            "action_mask": spaces.Box(0.0, 1.0, shape=(self.num_actions,), dtype=np.float32)
+        })
 
         # 创建实例时初始化环境
         self.reset()
 
-    def reset(self):
+    def reset(self, *, seed=None, options=None):
+        super().reset(seed=seed)
         # 维护每个物料号剩余订单数量
         self.remaining_qty = self.df_agg['计划产量'].values.copy()
 
@@ -51,7 +63,7 @@ class SchedulingEnv(gym.Env):
         
         self.step_cnt = 0
 
-        return self._get_obs()
+        return self._get_obs(), {}
 
 
     def _get_obs(self):
@@ -104,7 +116,9 @@ class SchedulingEnv(gym.Env):
             vio_biw_mat = 1.0 if (is_same_biw and not is_same_mat and order['整车物料号'] not in self.biw_mat_types and len(self.biw_mat_types) >= self.max_biw_mat_types) else 0.0
 
             candidate_features[idx] = [
-                is_same_model, is_same_biw, is_same_mat, pred_release_qty/100.0, vio_model_qty, vio_biw_qty, vio_mat_qty, vio_model_biw, vio_biw_mat
+                is_same_model, is_same_biw, is_same_mat, \
+                pred_release_qty/min(self.max_continuous_model_qty, self.max_continuous_biw_qty, self.max_continuous_mat_qty), \
+                vio_model_qty, vio_biw_qty, vio_mat_qty, vio_model_biw, vio_biw_mat
             ]
         
         return {
@@ -183,6 +197,14 @@ class SchedulingEnv(gym.Env):
         self.last_mat = order['整车物料号']
         self.step_cnt += 1
 
-        done = (np.sum(self.remaining_qty) == 0)
+        terminated = bool(np.sum(self.remaining_qty) <= 1e-6)
+        truncated = False
+        info = {"release_qty": float(release_qty), "cost": costs, "cost_sum": float(np.sum(costs))}
         
-        return self._get_obs(), reward, costs, done, {"release_qty": release_qty}
+        return self._get_obs(), float(reward), terminated, truncated, info
+
+
+if __name__ == "__main__":
+    from gymnasium.utils.env_checker import check_env
+    env = SchedulingEnv(data_path="../data/train_data.csv", config_path="../config/config.json")
+    check_env(env, skip_render_check=True)
