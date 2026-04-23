@@ -18,11 +18,11 @@ class ResidualBlock(nn.Module):
 
 
 class PPOLagrangianNetwork(nn.Module):
-    def __init__(self, env, max_actions: int):
+    def __init__(self, max_actions: int, state_dim: int, action_feat_dim: int):
         super().__init__()
         self.max_actions = max_actions
-        self.state_dim = env.observation_space['global_state'].shape[0]
-        self.action_feat_dim = env.observation_space['candidate_features'].shape[1]
+        self.state_dim = state_dim
+        self.action_feat_dim = action_feat_dim
         self.hidden_dim = 256
 
         # Actor
@@ -52,7 +52,7 @@ class PPOLagrangianNetwork(nn.Module):
         a = self.actor_res(a)
         logits = self.actor_out(a).squeeze(-1)
 
-        logits = logits.masked_fill(action_mask > 0.5, -1e9)
+        logits = logits.masked_fill(action_mask == 0, -1e9)
         return logits
 
     def forward_critic(self, global_state):
