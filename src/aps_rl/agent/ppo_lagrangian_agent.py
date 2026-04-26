@@ -74,9 +74,9 @@ class PPOlagrangianAgent:
         old_actions = torch.LongTensor(actions).to(self.device)
         old_log_probs = torch.FloatTensor(log_probs).to(self.device)
         rewards = torch.FloatTensor(rewards).to(self.device)
-        costs = torch.FloatTensor(costs).to(self.device)
-        vals_r = torch.FloatTensor(vals_r).to(self.device)
-        vals_c = torch.FloatTensor(vals_c).to(self.device)
+        costs = torch.FloatTensor(np.array(costs)).to(self.device)
+        vals_r = torch.FloatTensor(np.array(vals_r)).to(self.device)
+        vals_c = torch.FloatTensor(np.array(vals_c)).to(self.device)
         dones = torch.FloatTensor(dones).to(self.device)
 
         # 计算reward的GAE
